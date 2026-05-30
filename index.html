@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>NEON RONIN — 斬光帝都</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        background: #05060d;
+        overflow: hidden;
+        font-family: "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: none;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(ellipse at 50% 38%, #11142a 0%, #05060d 70%);
+      }
+      #game {
+        display: block;
+        image-rendering: auto;
+        box-shadow: 0 0 120px rgba(80, 120, 255, 0.12);
+      }
+      /* Loading shimmer shown before the JS engine boots */
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 18px;
+        color: #aeb6ff;
+        letter-spacing: 0.4em;
+        font-size: 13px;
+        background: #05060d;
+        z-index: 10;
+        transition: opacity 0.6s ease;
+      }
+      #boot .ring {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        border: 2px solid rgba(120, 150, 255, 0.18);
+        border-top-color: #7aa2ff;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+    </div>
+    <div id="boot">
+      <div class="ring"></div>
+      <div>LOADING</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

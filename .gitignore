@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# build output (Vercel builds this from source)
+dist/
+
+# title key-art generation candidates (local only, large)
+.titlegen/
+
+# vercel
+.vercel/
+
+# misc
+.DS_Store
+*.local
+.env
+.env.*
+npm-debug.log*
+yarn-error.log*
