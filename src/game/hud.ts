@@ -7,6 +7,7 @@ import { VIEW_W } from '../render/renderer.ts';
 import { bar, glowText, ringMeter, panel, roundRect } from '../render/ui.ts';
 import { mix, rgbStr } from '../render/color.ts';
 import { clamp01 } from '../core/math.ts';
+import { isTouch } from '../core/touch.ts';
 import { WEAPONS, PAL } from '../content/design.ts';
 
 export function drawHUD(ctx: CanvasRenderingContext2D, world: World): void {
@@ -64,8 +65,8 @@ export function drawHUD(ctx: CanvasRenderingContext2D, world: World): void {
     bg: 'rgba(255,255,255,0.06)', radius: 2.5,
   });
 
-  // ---- weapon switch hint (small) ----
-  if (run.weapons.length > 1) {
+  // ---- weapon switch hint (small) — on-screen buttons replace it on touch ----
+  if (run.weapons.length > 1 && !isTouch()) {
     glowText(ctx, '[C] 武器切替   [B] 残刃', VIEW_W / 2, 688, {
       size: 10, color: 'rgba(253,246,227,0.35)', weight: '600',
     });

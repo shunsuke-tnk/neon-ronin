@@ -4,6 +4,7 @@
 import { Renderer } from './render/renderer.ts';
 import { Input } from './core/input.ts';
 import { GameAudio } from './core/audio.ts';
+import { TouchControls } from './core/touch.ts';
 import { Game } from './game/game.ts';
 import { startLoop } from './core/loop.ts';
 import { preloadAll } from './render/assets.ts';
@@ -18,7 +19,8 @@ function boot(): void {
   const input = new Input();
   input.attach(window);
   const audio = new GameAudio();
-  const game = new Game(input, audio);
+  const touch = new TouchControls(input, renderer, canvas);
+  const game = new Game(input, audio, touch);
   // dev-only debug handle (stripped from production builds)
   if (import.meta.env.DEV) {
     (window as unknown as { __game: Game }).__game = game;

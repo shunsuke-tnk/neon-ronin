@@ -2,7 +2,7 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>NEON RONIN — 斬光帝都</title>
     <style>
       :root {
@@ -19,10 +19,12 @@
         height: 100%;
         background: #05060d;
         overflow: hidden;
+        overscroll-behavior: none;
         font-family: "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
         -webkit-user-select: none;
         user-select: none;
         touch-action: none;
+        -webkit-tap-highlight-color: transparent;
       }
       #app {
         position: fixed;
@@ -36,7 +38,49 @@
       #game {
         display: block;
         image-rendering: auto;
+        touch-action: none;
         box-shadow: 0 0 120px rgba(80, 120, 255, 0.12);
+      }
+      /* Landscape prompt — shown only on touch devices held in portrait */
+      #rotate {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        padding: 28px;
+        text-align: center;
+        background: #05060d;
+        color: #aeb6ff;
+      }
+      #rotate .phone {
+        width: 58px;
+        height: 96px;
+        border: 3px solid #7aa2ff;
+        border-radius: 13px;
+        box-shadow: 0 0 26px rgba(122, 162, 255, 0.4);
+        animation: tilt 1.8s ease-in-out infinite;
+      }
+      #rotate .lead {
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        color: #fdf6e3;
+      }
+      #rotate .sub {
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        color: rgba(174, 182, 255, 0.7);
+      }
+      @keyframes tilt {
+        0%, 38% { transform: rotate(0deg); }
+        62%, 100% { transform: rotate(-90deg); }
+      }
+      @media (orientation: portrait) and (pointer: coarse) {
+        #rotate { display: flex; }
       }
       /* Loading shimmer shown before the JS engine boots */
       #boot {
@@ -76,6 +120,11 @@
     <div id="boot">
       <div class="ring"></div>
       <div>LOADING</div>
+    </div>
+    <div id="rotate">
+      <div class="phone"></div>
+      <div class="lead">横画面でお楽しみください</div>
+      <div class="sub">端末を横向きにしてください</div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
