@@ -5,6 +5,7 @@ import { Renderer } from './render/renderer.ts';
 import { Input } from './core/input.ts';
 import { GameAudio } from './core/audio.ts';
 import { TouchControls } from './core/touch.ts';
+import { setupAutoFullscreen } from './core/fullscreen.ts';
 import { Game } from './game/game.ts';
 import { startLoop } from './core/loop.ts';
 import { preloadAll } from './render/assets.ts';
@@ -20,6 +21,7 @@ function boot(): void {
   input.attach(window);
   const audio = new GameAudio();
   const touch = new TouchControls(input, renderer, canvas);
+  setupAutoFullscreen();
   const game = new Game(input, audio, touch);
   // dev-only debug handle (stripped from production builds)
   if (import.meta.env.DEV) {
