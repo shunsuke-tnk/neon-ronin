@@ -44,6 +44,18 @@ export class Renderer {
     this.offsetY = 0;
   };
 
+  /**
+   * Convert a viewport (client) point to logical viewport coordinates. Used by
+   * the touch layer to hit-test on-screen controls regardless of letterboxing
+   * or device-pixel scaling. Points outside the canvas map outside [0,w]×[0,h].
+   */
+  clientToLogical(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * this.w;
+    const y = ((clientY - rect.top) / rect.height) * this.h;
+    return { x, y };
+  }
+
   /** Reset the transform so 1 unit == 1 logical pixel and clear the frame. */
   begin(): void {
     const { ctx } = this;

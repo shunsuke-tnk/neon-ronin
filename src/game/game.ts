@@ -4,6 +4,7 @@
 
 import type { Input } from '../core/input.ts';
 import type { GameAudio } from '../core/audio.ts';
+import type { TouchControls } from '../core/touch.ts';
 import { World } from './world.ts';
 import { baseStats, soulNeeded, type RunState } from './stats.ts';
 import { drawHUD } from './hud.ts';
@@ -51,6 +52,7 @@ function defaultSave(): SaveData {
 export class Game {
   private input: Input;
   private audio: GameAudio;
+  private touch: TouchControls;
   private save: SaveData;
   private stages = getStages();
 
@@ -64,9 +66,10 @@ export class Game {
   private menuIndex = 0;
   private flashTimer = 0;
 
-  constructor(input: Input, audio: GameAudio) {
+  constructor(input: Input, audio: GameAudio, touch: TouchControls) {
     this.input = input;
     this.audio = audio;
+    this.touch = touch;
     this.save = loadSave();
   }
 
@@ -119,6 +122,9 @@ export class Game {
     this.titleTime += dt;
     if (this.flashTimer > 0) this.flashTimer -= dt;
 
+    // The on-screen pad is only live during play; every other state takes taps.
+    this.touch.setMode(this.state === 'playing' ? 'play' : 'menu');
+
     switch (this.state) {
       case 'title': this.updateTitle(); break;
       case 'howto': this.updateHowto(); break;
@@ -130,6 +136,7 @@ export class Game {
       case 'victory': this.updateVictory(); break;
     }
     this.input.postUpdate();
+    this.touch.postUpdate();
   }
 
   private updateTitle(): void {
@@ -145,23 +152,50 @@ export class Game {
       this.audio.uiMove();
     }
     if (i.justPressed('confirm') || i.justPressed('attack')) {
-      this.audio.ensure();
-      if (this.menuIndex === 0) {
-        this.audio.uiSelect();
-        this.startRun(0);
-      } else if (this.menuIndex === 1) {
-        this.audio.uiSelect();
-        this.state = 'howto';
-      } else {
-        this.audio.toggleMute();
-        this.audio.uiSelect();
+      this.activateTitle();
+    }
+    // touch: tap a menu row to pick it directly
+    for (const t of this.touch.takeTaps()) {
+      const k = this.titleMenuHit(t.x, t.y);
+      if (k >= 0) {
+        this.menuIndex = k;
+        this.activateTitle();
+        break;
       }
     }
   }
 
+  private activateTitle(): void {
+    this.audio.ensure();
+    if (this.menuIndex === 0) {
+      this.audio.uiSelect();
+      this.startRun(0);
+    } else if (this.menuIndex === 1) {
+      this.audio.uiSelect();
+      this.state = 'howto';
+    } else {
+      this.audio.toggleMute();
+      this.audio.uiSelect();
+    }
+  }
+
+  /** Hit-test a tap against the title menu rows (see drawTitle). -1 if none. */
+  private titleMenuHit(x: number, y: number): number {
+    const cx = VIEW_W / 2;
+    const baseY = 452;
+    if (Math.abs(x - cx) > 170) return -1;
+    for (let k = 0; k < TITLE_MENU.length; k++) {
+      if (Math.abs(y - (baseY + k * 50)) <= 25) return k;
+    }
+    return -1;
+  }
+
   private updateHowto(): void {
     const i = this.input;
-    if (i.justPressed('confirm') || i.justPressed('attack') || i.justPressed('pause')) {
+    if (
+      i.justPressed('confirm') || i.justPressed('attack') || i.justPressed('pause') ||
+      this.touch.takeTaps().length > 0
+    ) {
       this.state = 'title';
       this.menuIndex = 0;
       this.audio.uiSelect();
@@ -217,20 +251,49 @@ export class Game {
       this.audio.uiMove();
     }
     if (i.justPressed('confirm') || i.justPressed('attack')) {
-      const card = this.cards[this.cardIndex];
-      const run = this.run!;
-      card.apply(run);
-      run.upgradeStacks[card.id] = (run.upgradeStacks[card.id] ?? 0) + 1;
-      this.audio.powerUp();
-      this.world!.pendingLevelUps--;
-      this.world!.flash(0, 240, 255, 0.4);
-      if (this.world!.pendingLevelUps > 0) {
-        this.cards = rollUpgrades(run);
-        this.cardIndex = 0;
-      } else {
-        this.state = 'playing';
+      this.chooseCard();
+      return;
+    }
+    // touch: tap a card to choose it directly
+    for (const t of this.touch.takeTaps()) {
+      const k = this.cardHit(t.x, t.y, n);
+      if (k >= 0) {
+        this.cardIndex = k;
+        this.chooseCard();
+        break;
       }
     }
+  }
+
+  private chooseCard(): void {
+    const card = this.cards[this.cardIndex];
+    const run = this.run!;
+    card.apply(run);
+    run.upgradeStacks[card.id] = (run.upgradeStacks[card.id] ?? 0) + 1;
+    this.audio.powerUp();
+    this.world!.pendingLevelUps--;
+    this.world!.flash(0, 240, 255, 0.4);
+    if (this.world!.pendingLevelUps > 0) {
+      this.cards = rollUpgrades(run);
+      this.cardIndex = 0;
+    } else {
+      this.state = 'playing';
+    }
+  }
+
+  /** Hit-test a tap against the upgrade cards (layout mirrors drawLevelUp). */
+  private cardHit(x: number, y: number, n: number): number {
+    const cw = 240;
+    const gap = 36;
+    const totalW = n * cw + (n - 1) * gap;
+    let cx = (VIEW_W - totalW) / 2;
+    const y0 = 260;
+    const ch = 300;
+    for (let k = 0; k < n; k++) {
+      if (x >= cx && x <= cx + cw && y >= y0 - 16 && y <= y0 + ch) return k;
+      cx += cw + gap;
+    }
+    return -1;
   }
 
   private updatePaused(): void {
@@ -244,15 +307,38 @@ export class Game {
       return;
     }
     if (i.justPressed('confirm') || i.justPressed('attack')) {
-      if (this.menuIndex === 0) {
-        this.state = 'playing';
-      } else {
-        this.audio.stopMusic();
-        this.bankSoul();
-        this.state = 'title';
-      }
-      this.audio.uiSelect();
+      this.activatePause();
+      return;
     }
+    // touch: tap a row to pick it
+    for (const t of this.touch.takeTaps()) {
+      const k = this.pauseMenuHit(t.x, t.y);
+      if (k >= 0) {
+        this.menuIndex = k;
+        this.activatePause();
+        break;
+      }
+    }
+  }
+
+  private activatePause(): void {
+    if (this.menuIndex === 0) {
+      this.state = 'playing';
+    } else {
+      this.audio.stopMusic();
+      this.bankSoul();
+      this.state = 'title';
+    }
+    this.audio.uiSelect();
+  }
+
+  /** Hit-test a tap against the pause menu rows (see drawPause). -1 if none. */
+  private pauseMenuHit(x: number, y: number): number {
+    if (Math.abs(x - VIEW_W / 2) > 200) return -1;
+    for (let k = 0; k < 2; k++) {
+      if (Math.abs(y - (360 + k * 54)) <= 26) return k;
+    }
+    return -1;
   }
 
   private bankSoul(): void {
@@ -279,7 +365,10 @@ export class Game {
   }
 
   private updateCleared(): void {
-    if (this.input.justPressed('confirm') || this.input.justPressed('attack') || this.input.justPressed('jump')) {
+    if (
+      this.input.justPressed('confirm') || this.input.justPressed('attack') ||
+      this.input.justPressed('jump') || this.touch.takeTaps().length > 0
+    ) {
       const run = this.run!;
       run.hp = Math.min(run.stats.maxHp, run.hp + run.stats.maxHp * 0.35);
       run.ultGauge = Math.min(1, run.ultGauge + 0.3);
@@ -296,7 +385,10 @@ export class Game {
   }
 
   private updateGameOver(): void {
-    if (this.input.justPressed('confirm') || this.input.justPressed('attack')) {
+    if (
+      this.input.justPressed('confirm') || this.input.justPressed('attack') ||
+      this.touch.takeTaps().length > 0
+    ) {
       this.state = 'title';
       this.world = null;
       this.run = null;
@@ -305,7 +397,10 @@ export class Game {
   }
 
   private updateVictory(): void {
-    if (this.input.justPressed('confirm') || this.input.justPressed('attack')) {
+    if (
+      this.input.justPressed('confirm') || this.input.justPressed('attack') ||
+      this.touch.takeTaps().length > 0
+    ) {
       this.state = 'title';
       this.world = null;
       this.run = null;
@@ -328,6 +423,7 @@ export class Game {
       case 'playing':
         this.world!.render(ctx);
         drawHUD(ctx, this.world!);
+        this.touch.render(ctx, { ultReady: this.world!.run.ultGauge >= 1 });
         break;
       case 'levelup':
         this.world!.render(ctx);
@@ -425,9 +521,13 @@ export class Game {
         glowText(ctx, label, cx, y, { size: 23, color: 'rgba(253,246,227,0.55)', weight: '700' });
       }
     }
-    glowText(ctx, '↑ ↓ で選択　・　Z / Enter で決定', cx, baseY + TITLE_MENU.length * 50 + 16, {
-      size: 12, color: 'rgba(253,246,227,0.42)', weight: '600',
-    });
+    glowText(
+      ctx,
+      this.touch.enabled ? 'メニューをタップして選択' : '↑ ↓ で選択　・　Z / Enter で決定',
+      cx,
+      baseY + TITLE_MENU.length * 50 + 16,
+      { size: 12, color: 'rgba(253,246,227,0.42)', weight: '600' },
+    );
     glowText(ctx, `電脳魂  ◆ ${this.save.persistentSoul}`, cx, 642, {
       size: 14, color: PAL.gold, glow: PAL.gold, blur: 8,
     });
@@ -445,16 +545,27 @@ export class Game {
       size: 32, color: PAL.cyan, glow: PAL.cyan, blur: 16, weight: '900', letterSpacing: '10px',
     });
 
-    const rows: [string, string][] = [
-      ['移動', '← →  /  A  D'],
-      ['ジャンプ（空中でもう一度＝二段）', 'Z  /  Space'],
-      ['ダッシュ（空中・無敵あり）', 'Shift'],
-      ['斬る（居合）', 'X  /  J'],
-      ['武器を切り替える', 'C'],
-      ['残刃（必殺・ゲージ満タンで発動）', 'B'],
-      ['ポーズ', 'Esc'],
-      ['音の ON / OFF', 'M'],
-    ];
+    const rows: [string, string][] = this.touch.enabled
+      ? [
+          ['移動', '左スティック'],
+          ['ジャンプ（空中でもう一度＝二段）', '跳 ボタン'],
+          ['ダッシュ（空中・無敵あり）', '駆 ボタン'],
+          ['斬る（居合）', '斬 ボタン'],
+          ['武器を切り替える', '武 ボタン'],
+          ['残刃（必殺・ゲージ満タンで発動）', '残刃 ボタン'],
+          ['ポーズ', '右上のポーズ'],
+          ['音の ON / OFF', 'タイトルの「音」'],
+        ]
+      : [
+          ['移動', '← →  /  A  D'],
+          ['ジャンプ（空中でもう一度＝二段）', 'Z  /  Space'],
+          ['ダッシュ（空中・無敵あり）', 'Shift'],
+          ['斬る（居合）', 'X  /  J'],
+          ['武器を切り替える', 'C'],
+          ['残刃（必殺・ゲージ満タンで発動）', 'B'],
+          ['ポーズ', 'Esc'],
+          ['音の ON / OFF', 'M'],
+        ];
     let y = 208;
     for (const [k, v] of rows) {
       glowText(ctx, k, cx - 330, y, { size: 17, align: 'left', color: PAL.cream, weight: '700' });
@@ -474,7 +585,7 @@ export class Game {
     const blink = 0.55 + 0.45 * Math.sin(this.titleTime * 4);
     ctx.save();
     ctx.globalAlpha = blink;
-    glowText(ctx, '戻る　—　Z / Esc', cx, 628, {
+    glowText(ctx, this.touch.enabled ? 'タップで戻る' : '戻る　—　Z / Esc', cx, 628, {
       size: 16, color: PAL.gold, glow: PAL.gold, blur: 10, weight: '800',
     });
     ctx.restore();
@@ -534,7 +645,7 @@ export class Game {
       }
       x += cw + gap;
     }
-    glowText(ctx, '←→ で選択   Z / X で決定', VIEW_W / 2, 612, {
+    glowText(ctx, this.touch.enabled ? 'カードをタップして選ぶ' : '←→ で選択   Z / X で決定', VIEW_W / 2, 612, {
       size: 14, color: 'rgba(253,246,227,0.5)',
     });
   }
@@ -552,7 +663,7 @@ export class Game {
         glow: sel ? PAL.gold : undefined, blur: 12, weight: sel ? '900' : '700',
       });
     }
-    glowText(ctx, '↑↓ で選択   Z で決定   Esc で再開', VIEW_W / 2, 520, {
+    glowText(ctx, this.touch.enabled ? '項目をタップして選択' : '↑↓ で選択   Z で決定   Esc で再開', VIEW_W / 2, 520, {
       size: 13, color: 'rgba(253,246,227,0.4)',
     });
   }
@@ -570,7 +681,7 @@ export class Game {
     const blink = 0.5 + 0.5 * Math.sin(this.titleTime * 4);
     ctx.save();
     ctx.globalAlpha = blink;
-    glowText(ctx, '次のステージへ — PRESS Z', VIEW_W / 2, 480, {
+    glowText(ctx, this.touch.enabled ? '次のステージへ — タップ' : '次のステージへ — PRESS Z', VIEW_W / 2, 480, {
       size: 22, color: PAL.cream, glow: PAL.magenta, blur: 12, weight: '800',
     });
     ctx.restore();
@@ -587,7 +698,7 @@ export class Game {
     const blink = 0.5 + 0.5 * Math.sin(this.titleTime * 4);
     ctx.save();
     ctx.globalAlpha = blink;
-    glowText(ctx, 'PRESS Z', VIEW_W / 2, 470, { size: 22, color: PAL.cream, glow: PAL.cyan, blur: 12, weight: '800' });
+    glowText(ctx, this.touch.enabled ? 'タップで戻る' : 'PRESS Z', VIEW_W / 2, 470, { size: 22, color: PAL.cream, glow: PAL.cyan, blur: 12, weight: '800' });
     ctx.restore();
   }
 
@@ -602,7 +713,7 @@ export class Game {
     const blink = 0.5 + 0.5 * Math.sin(this.titleTime * 4);
     ctx.save();
     ctx.globalAlpha = blink;
-    glowText(ctx, 'PRESS Z', VIEW_W / 2, 480, { size: 22, color: PAL.cream, glow: PAL.magenta, blur: 12, weight: '800' });
+    glowText(ctx, this.touch.enabled ? 'タップで戻る' : 'PRESS Z', VIEW_W / 2, 480, { size: 22, color: PAL.cream, glow: PAL.magenta, blur: 12, weight: '800' });
     ctx.restore();
   }
 }
